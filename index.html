@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Day 21 · Atmospheric Currents & Climate Drivers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..800&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EAF0F3; --surface:#FFFFFF; --ink:#142534; --muted:#54687A; --line:#C7D3DC;
+  --action:#1D4E7A; --action-ink:#FFFFFF; --hadley:#C97E12; --ferrel:#2C8574; --polar:#3F7DBF;
+  --front:#B23E2C; --ok:#2C7A4B; --soft:#F3F7F9; --warn-bg:#FFF4DC; --warn-ink:#6B4A06;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0E1922; --surface:#162430; --ink:#E4EDF2; --muted:#94A8B7; --line:#2B3E4D;
+    --action:#7FB3E3; --action-ink:#0E1922; --hadley:#E9A646; --ferrel:#5FC0AC; --polar:#86B6EA;
+    --front:#EC7A65; --ok:#6FCB94; --soft:#1C2D3A; --warn-bg:#3A2E12; --warn-ink:#F2D28C;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0E1922; --surface:#162430; --ink:#E4EDF2; --muted:#94A8B7; --line:#2B3E4D;
+  --action:#7FB3E3; --action-ink:#0E1922; --hadley:#E9A646; --ferrel:#5FC0AC; --polar:#86B6EA;
+  --front:#EC7A65; --ok:#6FCB94; --soft:#1C2D3A; --warn-bg:#3A2E12; --warn-ink:#F2D28C;
+  color-scheme: dark;
+}
+:root{ box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px); }
+html{ scroll-padding-top:env(safe-area-inset-top,0px); }
+*,*::before,*::after{ box-sizing:inherit; }
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:"Archivo", "Helvetica Neue", Arial, sans-serif; font-size:17px; line-height:1.5;
+}
+img,iframe{ max-width:100%; }
+button,input,textarea{ font:inherit; color:inherit; }
+:focus-visible{ outline:3px solid var(--action); outline-offset:2px; }
+
+.app{ display:grid; grid-template-columns:240px minmax(0,1fr); gap:0; min-height:100vh; max-width:1180px; margin:0 auto; }
+
+/* ---- Latitude rail ---- */
+.rail{ position:sticky; top:0; align-self:start; height:100vh; padding:28px 18px 28px 24px; overflow-y:auto; }
+.rail h1{ font-stretch:80%; font-weight:800; font-size:1.05rem; line-height:1.2; margin:0 0 4px; }
+.rail .sub{ color:var(--muted); font-size:.85rem; margin:0 0 22px; }
+.meridian{ position:relative; padding-left:26px; }
+.meridian::before{ content:""; position:absolute; left:8px; top:6px; bottom:6px; width:2px; background:var(--line); }
+.meridian .fill{ position:absolute; left:8px; bottom:6px; width:2px; background:var(--ink); transition:height .4s ease; }
+.lat-steps{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column-reverse; }
+.lat-steps li{ position:relative; }
+.lat-steps button{
+  display:block; width:100%; text-align:left; background:none; border:0; padding:5px 6px; border-radius:6px;
+  font-size:.86rem; color:var(--muted); cursor:pointer; line-height:1.3;
+}
+.lat-steps button:disabled{ cursor:default; opacity:.55; }
+.lat-steps button:not(:disabled):hover{ background:var(--soft); }
+.lat-steps li::before{
+  content:""; position:absolute; left:-23px; top:10px; width:10px; height:10px; border-radius:50%;
+  background:var(--paper); border:2px solid var(--line);
+}
+.lat-steps li.done::before{ background:var(--ink); border-color:var(--ink); }
+.lat-steps li.current::before{ background:var(--front); border-color:var(--front); box-shadow:0 0 0 4px color-mix(in srgb, var(--front) 22%, transparent); }
+.lat-steps li.current button{ color:var(--ink); font-weight:650; }
+.lat-steps li.done button{ color:var(--ink); }
+.lat-steps .part-tag{ font-size:.72rem; color:var(--muted); display:block; font-stretch:85%; margin:14px 0 2px 6px; }
+.lat-readout{ margin-top:20px; font-stretch:75%; font-weight:800; font-size:2.6rem; line-height:1; letter-spacing:-.01em; }
+.lat-readout small{ display:block; font-size:.78rem; font-weight:500; font-stretch:100%; color:var(--muted); letter-spacing:0; margin-top:6px; }
+
+/* ---- Main ---- */
+main{ padding:32px 32px 80px; min-width:0; }
+.mobile-bar{ display:none; }
+.card{ background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:28px 30px; }
+.kicker{ color:var(--muted); font-size:.9rem; margin:0 0 6px; }
+h2.step-title{ font-stretch:85%; font-weight:800; font-size:clamp(1.6rem, 3.2vw, 2.2rem); line-height:1.1; margin:0 0 18px; }
+.reading{ font-family:"Literata", Georgia, "Times New Roman", serif; font-size:1.04rem; line-height:1.75; max-width:68ch; }
+.reading p{ margin:0 0 1em; }
+.reading strong{ font-weight:600; }
+.band{ display:inline-block; width:.7em; height:.7em; border-radius:2px; margin-right:.35em; vertical-align:baseline; }
+
+.video-wrap{ position:relative; width:100%; aspect-ratio:16/9; background:#000; border-radius:10px; overflow:hidden; }
+.video-wrap iframe{ position:absolute; inset:0; width:100%; height:100%; border:0; }
+.watch{ margin:14px 0 22px; }
+.watch-row{ display:flex; align-items:center; gap:12px; font-size:.92rem; color:var(--muted); }
+.meter{ flex:1; height:8px; background:var(--soft); border:1px solid var(--line); border-radius:99px; overflow:hidden; }
+.meter span{ display:block; height:100%; width:0; background:var(--polar); transition:width .3s ease; }
+.meter.full span{ background:var(--ok); }
+.watch-row strong{ color:var(--ink); font-variant-numeric:tabular-nums; }
+.open-video{ display:flex; flex-wrap:wrap; align-items:center; gap:12px 18px; background:var(--soft); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin:0 0 24px; }
+.open-video .btn{ text-decoration:none; display:inline-block; }
+.open-video p{ margin:0; color:var(--muted); font-size:.95rem; flex:1 1 220px; }
+.fallback{ background:var(--warn-bg); color:var(--warn-ink); border-radius:10px; padding:12px 14px; margin-top:10px; font-size:.92rem; }
+.fallback a{ color:inherit; font-weight:650; }
+
+.q{ margin:0 0 22px; }
+.q label{ display:block; font-weight:600; margin-bottom:8px; line-height:1.4; max-width:70ch; }
+.q textarea{
+  width:100%; min-height:110px; resize:vertical; padding:12px 14px; border-radius:10px;
+  border:1.5px solid var(--line); background:var(--soft); line-height:1.5;
+}
+.q textarea:focus{ border-color:var(--action); background:var(--surface); outline:none; }
+.q .count{ font-size:.82rem; color:var(--muted); margin-top:4px; }
+.q .count.ok{ color:var(--ok); }
+
+.field{ margin:0 0 18px; max-width:420px; }
+.field label{ display:block; font-weight:600; margin-bottom:6px; }
+.field input{ width:100%; padding:11px 14px; border-radius:10px; border:1.5px solid var(--line); background:var(--soft); }
+.field input:focus{ border-color:var(--action); background:var(--surface); outline:none; }
+
+.check{ display:flex; gap:10px; align-items:flex-start; margin:18px 0 0; font-weight:600; cursor:pointer; }
+.check input{ width:20px; height:20px; margin-top:2px; accent-color:var(--action); flex:none; }
+
+.nav{ display:flex; justify-content:space-between; align-items:center; gap:14px; margin-top:24px; flex-wrap:wrap; }
+.btn{
+  border:0; border-radius:10px; padding:12px 22px; font-weight:700; cursor:pointer;
+  background:var(--action); color:var(--action-ink);
+}
+.btn:disabled{ opacity:.4; cursor:not-allowed; }
+.btn.ghost{ background:transparent; color:var(--ink); border:1.5px solid var(--line); }
+.needs{ font-size:.88rem; color:var(--muted); margin:0; flex:1 1 220px; }
+
+.policy{ border-left:5px solid var(--front); background:var(--soft); padding:12px 16px; border-radius:0 10px 10px 0; margin:0 0 22px; font-size:.95rem; }
+
+/* Start hero */
+.hero{ display:grid; grid-template-columns:auto 1fr; gap:28px; align-items:center; margin-bottom:26px; }
+.hero-lats{ font-stretch:75%; font-weight:800; line-height:.92; font-size:clamp(2.4rem, 6vw, 4.2rem); letter-spacing:-.02em; }
+.hero-lats div:nth-child(1){ color:var(--polar); }
+.hero-lats div:nth-child(2){ color:var(--ferrel); }
+.hero-lats div:nth-child(3){ color:var(--hadley); }
+.hero-lats div:nth-child(4){ color:var(--ink); }
+.hero p{ margin:0 0 10px; max-width:52ch; }
+.hero .dq{ font-family:"Literata", Georgia, serif; font-size:1.25rem; line-height:1.4; }
+
+/* Report */
+.report h3{ font-stretch:85%; font-weight:800; font-size:1.25rem; margin:30px 0 12px; padding-top:16px; border-top:2px solid var(--ink); }
+.report h3:first-of-type{ margin-top:8px; }
+.ans{ margin:0 0 16px; break-inside:avoid; }
+.ans .p{ font-weight:600; margin:0 0 4px; }
+.ans .a{ margin:0; white-space:pre-wrap; font-family:"Literata", Georgia, serif; line-height:1.65; padding-left:14px; border-left:3px solid var(--line); }
+.checklist{ list-style:none; padding:0; margin:0; display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:8px 18px; }
+.checklist label{ display:flex; gap:10px; align-items:flex-start; cursor:pointer; }
+.checklist input{ width:19px; height:19px; margin-top:3px; accent-color:var(--ok); flex:none; }
+.explain{ background:var(--soft); border-radius:10px; padding:14px 18px; }
+.explain ol{ margin:6px 0 0; padding-left:20px; }
+.report-actions{ display:flex; gap:12px; flex-wrap:wrap; margin:18px 0 6px; }
+.status{ font-size:.9rem; color:var(--muted); min-height:1.3em; }
+
+@media (max-width: 860px){
+  .app{ display:block; }
+  .rail{ display:none; }
+  main{ padding:0 14px 60px; }
+  .mobile-bar{
+    display:block; position:sticky; top:env(safe-area-inset-top,0px); z-index:5; background:var(--paper);
+    padding:12px 2px 10px; margin-bottom:10px;
+  }
+  body::before{ content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top,0px); z-index:10; background:var(--paper); }
+  .mobile-bar .row{ display:flex; justify-content:space-between; font-size:.85rem; color:var(--muted); margin-bottom:6px; }
+  .mobile-bar .row b{ color:var(--ink); font-stretch:80%; }
+  .mobile-bar .track{ height:6px; background:var(--line); border-radius:99px; overflow:hidden; }
+  .mobile-bar .track span{ display:block; height:100%; background:var(--ink); transition:width .4s ease; }
+  .card{ padding:20px 18px; }
+  .hero{ grid-template-columns:1fr; gap:14px; }
+  .hero-lats{ display:flex; gap:14px; font-size:2.2rem; }
+}
+@media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="rail" aria-label="Progress">
+    <h1>Atmospheric Currents &amp; Climate Drivers</h1>
+    <p class="sub">Dangerous Earth, Unit 3 · Day 21</p>
+    <div class="meridian"><div class="fill" id="railFill"></div><ol class="lat-steps" id="railSteps"></ol></div>
+    <div class="lat-readout" id="latReadout">0°<small>Start at the equator. Finish at the pole.</small></div>
+  </aside>
+  <main>
+    <div class="mobile-bar" id="mobileBar"></div>
+    <div id="view"></div>
+  </main>
+</div>
+
+<script>
+/* ===========================================================
+   CONTENT — edit questions here. Each clip step lists its
+   YouTube id and the questions students answer for that clip.
+   =========================================================== */
+const MIN_WORDS = 8;          // minimum words per answer
+const WATCH_REQUIRED = 0.9;   // share of a clip that must be played
+const FALLBACK_SECONDS = 120; // wait time if a video can’t be tracked
+
+const STEPS = [
+  { type:"start", label:"Start" },
+
+  { type:"read", part:1, label:"Reading: wind belts & jets", title:"Why the planet builds wind belts", html:`
+    <p>Earth doesn’t heat evenly. The tropics receive intense, direct sunlight while the poles receive weak, angled sunlight. The atmosphere’s response to this uneven heating creates three pairs of giant convection loops — one pair in each hemisphere — called <strong>atmospheric circulation cells</strong>.</p>
+    <p><span class="band" style="background:var(--hadley)"></span>The <strong>Hadley Cells</strong> (0°–30°) are thermally direct: intense equatorial heating drives powerful rising air, which flows poleward aloft, cools, and sinks near 30° — creating the world’s subtropical deserts and the surface <strong>trade winds</strong>.</p>
+    <p><span class="band" style="background:var(--ferrel)"></span>The <strong>Ferrel Cells</strong> (30°–60°) sit in the mid-latitudes and produce the <strong>prevailing westerlies</strong> — the reason Michigan’s weather always arrives from the west.</p>
+    <p><span class="band" style="background:var(--polar)"></span>The <strong>Polar Cells</strong> (60°–90°) are driven by cold sinking air at the poles, producing the <strong>polar easterlies</strong>. Where Ferrel and Polar Cells meet — around 60° latitude — is the <strong>polar front</strong>, one of the most storm-active zones on the planet.</p>
+    <p>At the boundaries between these cells, where large temperature contrasts exist, the atmosphere generates narrow high-speed rivers of wind called <strong>jet streams</strong> at altitudes of 30,000–40,000 feet. The <strong>polar jet stream</strong>, which forms at the polar front, is most important for mid-latitude weather — it meanders in waves called <strong>Rossby waves</strong>, and where it dips south it drags Arctic air with it, powering winter storms. It strengthens in winter when temperature contrasts are greatest and weakens in summer.</p>` },
+
+  { type:"clip", part:1, group:"cells", label:"Video 1 · clip A", title:"Global atmospheric circulation", clipNo:"Video 1, clip 1 of 2", video:"7fd03fBRsuU",
+    qs:[
+      { id:"v1a1", q:"Name the three circulation cells and the latitude range each one covers." },
+      { id:"v1a2", q:"Where does air rise and where does it sink in each cell? What does rising air create at the surface, and what does sinking air create?" }
+    ]},
+  { type:"clip", part:1, group:"cells", label:"Video 1 · clip B", title:"Global atmospheric circulation", clipNo:"Video 1, clip 2 of 2", video:"xqM83_og1Fc",
+    qs:[
+      { id:"v1b1", q:"Name the three surface wind belts. For each one, say which cell creates it and which direction it blows." },
+      { id:"v1b2", q:"What does the Coriolis effect do to moving air? Why does that matter for the direction of the wind belts?" }
+    ]},
+  { type:"clip", part:1, group:"jet", label:"Video 2 · clip A", title:"The jet stream", clipNo:"Video 2, clip 1 of 2", video:"5wCq2Y9CB6Y",
+    qs:[
+      { id:"v2a1", q:"Where does the polar jet stream form, and at what altitude?" },
+      { id:"v2a2", q:"What are Rossby waves? What does a trough in the jet stream mean for winter weather?" }
+    ]},
+  { type:"clip", part:1, group:"jet", label:"Video 2 · clip B", title:"The jet stream", clipNo:"Video 2, clip 2 of 2", video:"Lg91eowtfbw",
+    qs:[
+      { id:"v2b1", q:"Why is the jet stream stronger in winter than in summer?" },
+      { id:"v2b2", q:"How does the jet stream affect weather systems? How does it affect airplane flight times?" }
+    ]},
+  { type:"analysis", part:1, group:"a1", label:"Part 1 analysis", title:"Part 1 analysis",
+    qs:[
+      { id:"a1q1", q:"Why do the world’s major deserts tend to sit near 30° latitude? Connect your answer to Hadley Cell circulation." },
+      { id:"a1q2", q:"Michigan is in the Ferrel Cell zone. What does that tell you about which direction weather typically arrives from — and why?" },
+      { id:"a1q3", q:"Explain what a Rossby wave trough is and why it matters for Michigan’s winter weather." },
+      { id:"a1q4", q:"Why is the polar jet stream stronger and more active in winter than summer? Use the idea of temperature contrast in your answer." }
+    ]},
+
+  { type:"read", part:2, label:"Reading: ocean currents", title:"The ocean’s heat conveyor", html:`
+    <p>The ocean holds vastly more heat than the atmosphere. <strong>Surface currents</strong>, driven by the same wind belts from Part 1, organize into enormous rotating systems called <strong>gyres</strong>. The North Atlantic gyre produces the <strong>Gulf Stream</strong> — a powerful river of warm tropical water that flows northward along the U.S. East Coast and across toward Northwestern Europe, keeping cities like London dramatically warmer than their latitude would otherwise allow.</p>
+    <p>Deep below the surface, the <strong>thermohaline circulation</strong> (the “ocean conveyor belt”) is driven by differences in water temperature and salinity — cold, salty water is denser and sinks, while warm, less-salty water rises. This circulation connects all ocean basins and moves heat globally over hundreds to thousands of years.</p>
+    <p>Ocean temperatures also drive <strong>El Niño</strong> and <strong>La Niña</strong> cycles (ENSO), which shift jet streams, alter rainfall patterns worldwide, and directly affect Atlantic hurricane activity — as you saw in the hurricane unit.</p>` },
+  { type:"clip", part:2, group:"ocean", label:"Video 3 · clip A", title:"Ocean currents & climate", clipNo:"Video 3, clip 1 of 2", video:"p4pWafuvdrY",
+    qs:[
+      { id:"v3a1", q:"What drives surface currents? What drives the deep thermohaline circulation?" },
+      { id:"v3a2", q:"What is the Gulf Stream, and why does it keep Western Europe warm?" }
+    ]},
+  { type:"clip", part:2, group:"ocean", label:"Video 3 · clip B", title:"Ocean currents & climate", clipNo:"Video 3, clip 2 of 2", video:"xa6SdvFA3w0",
+    qs:[
+      { id:"v3b1", q:"What are El Niño and La Niña? Describe what happens to ocean temperatures in each." },
+      { id:"v3b2", q:"How do El Niño and La Niña change weather patterns around the world, including Atlantic hurricane activity?" }
+    ]},
+  { type:"read", part:2, label:"Reading: climate drivers", title:"What has always moved Earth’s climate", html:`
+    <p>Earth’s climate has never been static — it has cycled through ice ages and warm periods for billions of years, driven by natural forces operating on timescales from years to millions of years.</p>
+    <p><strong>Milankovitch Cycles</strong> are slow, predictable changes in Earth’s orbit and axis: <em>eccentricity</em> (~100,000-year cycle — how elliptical the orbit is), <em>obliquity</em> (~41,000-year cycle — how tilted the axis is), and <em>precession</em> (~26,000-year cycle — the wobble in axis direction). When these align to reduce summer sunlight in the Northern Hemisphere, ice sheets can grow — triggering ice ages. They are the primary pacemaker of the glacial-interglacial cycles seen in ice core records.</p>
+    <p><strong>Volcanic eruptions</strong> can cool climate temporarily. Large eruptions blast sulfur dioxide into the stratosphere, forming sulfate aerosols that reflect sunlight. The 1991 Mount Pinatubo eruption cooled global temperatures by ~0.5°C for about two years. The 1815 Tambora eruption caused the “Year Without a Summer” in 1816. Cooling lasts 1–3 years as particles settle out.</p>
+    <p><strong>Solar variability</strong> — the sun’s ~11-year sunspot cycle — causes small fluctuations in energy output (~0.1%). Over longer timescales, a prolonged period of reduced solar activity called the <strong>Maunder Minimum</strong> (roughly 1645–1715) coincided with the coldest phase of the <strong>Little Ice Age</strong>, suggesting even modest solar changes can influence regional climates.</p>` },
+  { type:"clip", part:2, group:"drivers", label:"Video 4 · clip A", title:"Natural climate change drivers", clipNo:"Video 4, clip 1 of 2", video:"iA788usYNWA",
+    qs:[
+      { id:"v4a1", q:"Name the three Milankovitch cycles and the timescale of each." },
+      { id:"v4a2", q:"How does a volcanic eruption cause temporary cooling? Describe the specific mechanism." }
+    ]},
+  { type:"clip", part:2, group:"drivers", label:"Video 4 · clip B", title:"Natural climate change drivers", clipNo:"Video 4, clip 2 of 2", video:"tMwFNMfjFuU",
+    qs:[
+      { id:"v4b1", q:"What is the solar (sunspot) cycle, and how does solar variability connect to the Little Ice Age?" },
+      { id:"v4b2", q:"Compare these natural drivers: which act over years, which over thousands of years, and which has the biggest effect on climate?" }
+    ]},
+  { type:"analysis", part:2, group:"a2", label:"Part 2 analysis", title:"Part 2 analysis",
+    qs:[
+      { id:"a2q1", q:"Explain why London, England has a much milder climate than Anchorage, Alaska, even though both cities are at similar latitudes." },
+      { id:"a2q2", q:"What drives the thermohaline circulation — and how is it different from what drives surface currents like the Gulf Stream?" },
+      { id:"a2q3", q:"Describe the three Milankovitch cycles and explain how they can trigger an ice age when they align in a particular way." },
+      { id:"a2q4", q:"Why does a major volcanic eruption cause temporary global cooling? Be specific about what is released, where it goes, and what it does to sunlight." },
+      { id:"a2q5", q:"Compare Milankovitch-driven climate change to volcanic cooling. How are they fundamentally different in terms of timescale and reversibility?" }
+    ]},
+
+  { type:"report", label:"Your drawing guide" }
+];
+
+const GROUPS = [
+  { key:"cells", title:"Circulation cells & surface wind belts" },
+  { key:"jet", title:"The jet stream" },
+  { key:"a1", title:"Part 1 analysis" },
+  { key:"ocean", title:"Ocean currents" },
+  { key:"drivers", title:"Natural climate drivers" },
+  { key:"a2", title:"Part 2 analysis" }
+];
+
+const MODEL_ITEMS = [
+  "The equator and the poles labeled on your Earth outline",
+  "All three circulation cells labeled: Hadley, Ferrel, Polar",
+  "Arrows showing where air rises and sinks in each cell",
+  "All three surface wind belts labeled: Trade Winds, Prevailing Westerlies, Polar Easterlies",
+  "The polar front labeled at ~60° latitude",
+  "The jet stream marked at the polar front boundary",
+  "Latitude zones marked: 0°, 30°, 60°, 90°",
+  "A short note explaining why deserts form near 30° latitude"
+];
+
+/* ===========================================================
+   STATE
+   =========================================================== */
+const KEY = "day21-circulation-v1";
+let S = { step:0, max:0, name:"", hour:"", answers:{}, read:{}, clips:{}, model:{} };
+try { const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(S, JSON.parse(raw)); } catch(e) {}
+let saveT = null;
+function save(){ clearTimeout(saveT); saveT = setTimeout(()=>{ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }, 250); }
+
+const words = s => (s||"").trim().split(/\s+/).filter(Boolean).length;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function stepComplete(i){
+  const st = STEPS[i];
+  if (st.type==="start") return S.name.trim().length > 1;
+  if (st.type==="read") return !!S.read[i];
+  if (st.type==="clip") return !!(S.clips[st.video]&&S.clips[st.video].done) && st.qs.every(q=>words(S.answers[q.id])>=MIN_WORDS);
+  if (st.type==="analysis") return st.qs.every(q=>words(S.answers[q.id])>=MIN_WORDS);
+  return true;
+}
+
+/* ===========================================================
+   RAIL / PROGRESS
+   =========================================================== */
+const LAST = STEPS.length - 1;
+const latOf = i => Math.round(i / LAST * 90);
+
+function renderRail(){
+  const ol = document.getElementById("railSteps");
+  let html = "";
+  STEPS.forEach((st,i)=>{
+    const cls = i===S.step ? "current" : (i<S.max || (i<=S.max && stepComplete(i) && i!==S.step) ? "done" : "");
+    html += `<li class="${cls}"><button ${i>S.max?"disabled":""} data-go="${i}">${esc(st.label)}</button></li>`;
+  });
+  ol.innerHTML = html;
+  ol.querySelectorAll("button[data-go]").forEach(b=>b.addEventListener("click",()=>go(+b.dataset.go)));
+  const pct = S.step / LAST;
+  document.getElementById("railFill").style.height = `calc(${pct*100}% - ${pct*12}px)`;
+  const lat = latOf(S.step);
+  const zone = lat < 30 ? "Hadley territory" : lat < 60 ? "Ferrel territory" : lat < 90 ? "Polar territory" : "You’ve reached the pole";
+  document.getElementById("latReadout").innerHTML = `${lat}°N<small>${zone}</small>`;
+  const st = STEPS[S.step];
+  document.getElementById("mobileBar").innerHTML =
+    `<div class="row"><span>Step ${S.step+1} of ${STEPS.length}</span><b>${lat}°N</b></div><div class="track"><span style="width:${pct*100}%"></span></div>`;
+}
+
+/* ===========================================================
+   VIDEO TRACKING (YouTube postMessage, no extra scripts)
+   =========================================================== */
+let player = null;
+function stopPlayer(){
+  if (!player) return;
+  clearInterval(player.pinger); clearTimeout(player.fbTimer); clearInterval(player.fbTick);
+  player = null;
+}
+window.addEventListener("message", e=>{
+  if (!player || e.source !== player.iframe.contentWindow) return;
+  let d; try { d = typeof e.data==="string" ? JSON.parse(e.data) : e.data; } catch(err){ return; }
+  if (!d || !d.event) return;
+  player.live = true;
+  const info = d.info;
+  if (d.event==="onStateChange" && typeof info==="number") player.state = info;
+  if (info && typeof info==="object"){
+    if (typeof info.playerState==="number") player.state = info.playerState;
+    if (typeof info.duration==="number" && info.duration>0) player.rec.dur = info.duration;
+    if (typeof info.currentTime==="number") track(info.currentTime);
+  }
+  if (player.state===0 && player.last!=null) { markRange(player.last, player.rec.dur); }
+  updateWatch();
+});
+function markRange(a,b){
+  const seen = player.seen;
+  for (let s=Math.floor(a); s<=Math.floor(b); s++) seen.add(s);
+}
+function track(t){
+  const p = player;
+  if (p.state===1 && p.last!=null && t>=p.last && t-p.last<=3.5) markRange(p.last, t);
+  p.last = t;
+}
+function updateWatch(){
+  const p = player; if (!p) return;
+  const dur = Math.floor(p.rec.dur||0);
+  let pct = 0;
+  if (dur>0){ pct = Math.min(1, p.seen.size / dur); }
+  p.rec.seen = Array.from(p.seen);
+  if (pct >= WATCH_REQUIRED) p.rec.done = true;
+  save();
+  const m = document.getElementById("meter"), lab = document.getElementById("watchLabel");
+  if (!m) return;
+  const shown = p.rec.done ? 1 : pct;
+  m.querySelector("span").style.width = (shown*100)+"%";
+  m.classList.toggle("full", !!p.rec.done);
+  lab.innerHTML = p.rec.done ? "<strong>Watched</strong>" : `<strong>${Math.round(pct*100)}%</strong> watched`;
+  refreshNav();
+}
+function startPlayer(st){
+  const iframe = document.getElementById("yt");
+  const rec = S.clips[st.video] || (S.clips[st.video] = { seen:[], dur:0, done:false });
+  player = { iframe, rec, seen:new Set(rec.seen||[]), last:null, state:-1, live:false };
+  const ping = ()=>{
+    try{
+      iframe.contentWindow.postMessage(JSON.stringify({event:"listening", id:st.video, channel:"widget"}), "*");
+      iframe.contentWindow.postMessage(JSON.stringify({event:"command", func:"addEventListener", args:["onStateChange"], id:st.video, channel:"widget"}), "*");
+    }catch(e){}
+  };
+  iframe.addEventListener("load", ping);
+  const me = player;
+  player.pinger = setInterval(()=>{ if (me.live) { clearInterval(me.pinger); return; } ping(); }, 1000);
+  player.fbTimer = setTimeout(()=>{ if (player===me && !me.live && !rec.done) showFallback(st); }, 12000);
+  updateWatch();
+}
+function showFallback(st){
+  const box = document.getElementById("fallback"); if (!box) return;
+  box.hidden = false;
+  box.innerHTML = `This video can’t report your progress here. <a href="https://www.youtube.com/watch?v=${st.video}" target="_blank" rel="noopener" id="fbLink">Open it on YouTube</a>, watch the whole clip, then come back. Next unlocks ${FALLBACK_SECONDS/60} minutes after you open it.`;
+  document.getElementById("fbLink").addEventListener("click", ()=>{
+    const me = player; if (!me) return;
+    let left = FALLBACK_SECONDS;
+    clearInterval(me.fbTick);
+    me.fbTick = setInterval(()=>{
+      left--;
+      const lab = document.getElementById("watchLabel");
+      if (lab && !me.rec.done) lab.innerHTML = `Unlocks in <strong>${Math.floor(left/60)}:${String(left%60).padStart(2,"0")}</strong>`;
+      if (left<=0){ clearInterval(me.fbTick); me.rec.done = true; save(); updateWatch(); }
+    },1000);
+  });
+}
+
+/* ===========================================================
+   VIEWS
+   =========================================================== */
+function qBlock(q){
+  const v = S.answers[q.id]||"";
+  return `<div class="q"><label for="${q.id}">${esc(q.q)}</label>
+    <textarea id="${q.id}" data-q="${q.id}">${esc(v)}</textarea>
+    <div class="count" id="c_${q.id}"></div></div>`;
+}
+function countText(id){
+  const n = words(S.answers[id]);
+  const el = document.getElementById("c_"+id); if (!el) return;
+  el.textContent = n>=MIN_WORDS ? `${n} words` : `${n} words — write at least ${MIN_WORDS}`;
+  el.classList.toggle("ok", n>=MIN_WORDS);
+}
+
+function needsText(i){
+  const st = STEPS[i];
+  if (st.type==="start") return "Type your name to begin.";
+  if (st.type==="read") return "Check the box once you’ve read the whole section.";
+  const missing = st.qs.filter(q=>words(S.answers[q.id])<MIN_WORDS).length;
+  const parts = [];
+  if (st.type==="clip" && !(S.clips[st.video]&&S.clips[st.video].done)) parts.push("check the box saying you watched the whole video");
+  if (missing) parts.push(`answer ${missing===1?"1 more question":missing+" more questions"} (${MIN_WORDS}+ words each)`);
+  return parts.length ? "To unlock Next: " + parts.join(" and ") + "." : "";
+}
+function refreshNav(){
+  const nb = document.getElementById("nextBtn"); if (!nb) return;
+  const ok = stepComplete(S.step);
+  nb.disabled = !ok;
+  document.getElementById("needs").textContent = ok ? "" : needsText(S.step);
+}
+function navHTML(nextLabel){
+  return `<div class="nav">
+    ${S.step>0?`<button class="btn ghost" id="backBtn">Back</button>`:"<span></span>"}
+    <p class="needs" id="needs" aria-live="polite"></p>
+    <button class="btn" id="nextBtn">${nextLabel||"Next"}</button></div>`;
+}
+function wireNav(){
+  const b = document.getElementById("backBtn"); if (b) b.addEventListener("click",()=>go(S.step-1));
+  const n = document.getElementById("nextBtn"); if (n) n.addEventListener("click",()=>{ if (stepComplete(S.step)) go(S.step+1); });
+  refreshNav();
+}
+function wireAnswers(){
+  document.querySelectorAll("textarea[data-q]").forEach(t=>{
+    countText(t.dataset.q);
+    t.addEventListener("input",()=>{ S.answers[t.dataset.q]=t.value; save(); countText(t.dataset.q); refreshNav(); });
+  });
+}
+
+function partKicker(st){ return `Part ${st.part} · ${st.part===1?"Wind belts & jet streams":"Ocean currents & climate drivers"}`; }
+
+function render(){
+  stopPlayer();
+  const st = STEPS[S.step];
+  const v = document.getElementById("view");
+  let h = "";
+
+  if (st.type==="start"){
+    h = `<div class="card">
+      <div class="hero">
+        <div class="hero-lats" aria-hidden="true"><div>90°</div><div>60°</div><div>30°</div><div>0°</div></div>
+        <div>
+          <p class="kicker">Unit driving question</p>
+          <p class="dq">How do we stay safe when the sky turns deadly?</p>
+          <p>Today you’ll work your way from the equator to the pole: read each section, open each clip in a new tab and watch it all the way through, then answer its questions. When you finish, you’ll get a drawing guide built from your own answers. You’ll use it to draw the whole global circulation system on your desk and explain it to Mr. Caves.</p>
+        </div>
+      </div>
+      <div class="policy"><strong>AI is not permitted today.</strong> Your answers must come from the readings and videos on this page, not a chatbot.</div>
+      <div class="field"><label for="nm">Your name</label><input id="nm" autocomplete="name" value="${esc(S.name)}"></div>
+      <div class="field"><label for="hr">Class hour (optional)</label><input id="hr" value="${esc(S.hour)}"></div>
+      ${navHTML("Start")}
+    </div>`;
+    v.innerHTML = h;
+    const nm = document.getElementById("nm"), hr = document.getElementById("hr");
+    nm.addEventListener("input",()=>{ S.name=nm.value; save(); refreshNav(); });
+    hr.addEventListener("input",()=>{ S.hour=hr.value; save(); });
+    wireNav();
+  }
+
+  else if (st.type==="read"){
+    h = `<div class="card"><p class="kicker">${partKicker(st)} · Background reading</p>
+      <h2 class="step-title">${esc(st.title)}</h2>
+      <div class="reading">${st.html}</div>
+      <label class="check"><input type="checkbox" id="readBox" ${S.read[S.step]?"checked":""}> I read this whole section.</label>
+      ${navHTML()}</div>`;
+    v.innerHTML = h;
+    document.getElementById("readBox").addEventListener("change",e=>{ S.read[S.step]=e.target.checked; save(); refreshNav(); });
+    wireNav();
+  }
+
+  else if (st.type==="clip"){
+    h = `<div class="card"><p class="kicker">${partKicker(st)} · ${esc(st.clipNo)}</p>
+      <h2 class="step-title">${esc(st.title)}</h2>
+      <div class="open-video">
+        <a class="btn" href="https://www.youtube.com/watch?v=${st.video}" target="_blank" rel="noopener">▶ Open this video in a new tab</a>
+        <p>Watch the whole clip in the new tab, then come back here to answer.</p>
+      </div>
+      ${st.qs.map(qBlock).join("")}
+      <label class="check"><input type="checkbox" id="watchBox" ${S.clips[st.video]&&S.clips[st.video].done?"checked":""}> I watched this whole video, start to finish.</label>
+      ${navHTML()}</div>`;
+    v.innerHTML = h;
+    document.getElementById("watchBox").addEventListener("change",e=>{
+      S.clips[st.video] = Object.assign(S.clips[st.video]||{}, { done:e.target.checked }); save(); refreshNav();
+    });
+    wireAnswers(); wireNav();
+  }
+
+  else if (st.type==="analysis"){
+    h = `<div class="card"><p class="kicker">${partKicker(st)} · Pull it together</p>
+      <h2 class="step-title">${esc(st.title)}</h2>
+      <p style="margin:0 0 20px;max-width:65ch">Use your notes from the clips. Full sentences, and explain the <em>why</em>.</p>
+      ${st.qs.map(qBlock).join("")}
+      ${navHTML(S.step+1===LAST?"Build my drawing guide":"Next")}</div>`;
+    v.innerHTML = h;
+    wireAnswers(); wireNav();
+  }
+
+  else if (st.type==="report"){
+    v.innerHTML = `<div class="card report">${reportBody(true)}
+      <div class="report-actions">
+        <button class="btn" id="dlBtn" hidden>Download my guide</button>
+        <button class="btn ghost" id="backBtn">Back to edit answers</button>
+      </div>
+      <p class="status" id="dlStatus" aria-live="polite"></p>
+      <p style="margin-top:28px"><button class="btn ghost" id="resetBtn">Start over (erases everything)</button></p>
+    </div>`;
+    document.getElementById("backBtn").addEventListener("click",()=>go(S.step-1));
+    document.querySelectorAll("input[data-model]").forEach(c=>c.addEventListener("change",()=>{ S.model[c.dataset.model]=c.checked; save(); }));
+    document.getElementById("resetBtn").addEventListener("click",()=>{
+      if (confirm("Erase all your answers and start over?")){ S={ step:0, max:0, name:"", hour:"", answers:{}, read:{}, clips:{}, model:{} }; save(); render(); }
+    });
+    setupDownload();
+  }
+  renderRail();
+  window.scrollTo(0,0);
+}
+
+function reportBody(interactive){
+  const byGroup = {};
+  STEPS.forEach(st=>{ if (st.qs) (byGroup[st.group] ||= []).push(...st.qs); });
+  let h = `<p class="kicker">Drawing guide · ${esc(S.name||"")}${S.hour?" · Hour "+esc(S.hour):""}</p>
+    <h2 class="step-title">Your desk model guide</h2>
+    <p style="max-width:65ch;margin:0 0 6px">Keep this open while you draw. Everything below is in your own words. Your desk drawing must include all eight items, and you’ll explain each one to Mr. Caves.</p>
+    <h3>What your desk drawing must include</h3>
+    <ul class="checklist">${MODEL_ITEMS.map((m,i)=>`<li><label>${interactive?`<input type="checkbox" data-model="${i}" ${S.model[i]?"checked":""}>`:"☐"} <span>${esc(m)}</span></label></li>`).join("")}</ul>
+    <h3>Be ready to explain</h3>
+    <div class="explain"><ol>
+      <li>Which cell or wind belt was hardest to remember? Why do you think that is?</li>
+      <li>Choose any storm type from this unit. Mark on your desk drawing where that storm typically forms and where it tracks, and explain the connection to the cells, wind belts, or jet stream.</li>
+    </ol></div>`;
+  GROUPS.forEach(g=>{
+    h += `<h3>${esc(g.title)}</h3>`;
+    (byGroup[g.key]||[]).forEach(q=>{
+      h += `<div class="ans"><p class="p">${esc(q.q)}</p><p class="a">${esc(S.answers[q.id]||"(no answer)")}</p></div>`;
+    });
+  });
+  return h;
+}
+
+async function setupDownload(){
+  if (!window.claude || !window.claude.use) return;
+  let dl = null;
+  try { dl = await window.claude.use("downloads"); } catch(e){}
+  const btn = document.getElementById("dlBtn"); if (!dl || !btn) return;
+  btn.hidden = false;
+  btn.addEventListener("click", async ()=>{
+    const status = document.getElementById("dlStatus");
+    const doc = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Desk model guide · ${esc(S.name)}</title>
+<style>body{font-family:Georgia,"Times New Roman",serif;max-width:760px;margin:30px auto;padding:0 18px;color:#142534;line-height:1.55}
+h2{font-family:Arial,sans-serif;font-size:1.8rem;margin:0 0 10px}h3{font-family:Arial,sans-serif;border-top:2px solid #142534;padding-top:12px;margin:26px 0 10px}
+.kicker{color:#54687A;font-family:Arial,sans-serif;font-size:.9rem;margin:0}.ans{margin:0 0 14px;break-inside:avoid}.p{font-family:Arial,sans-serif;font-weight:bold;margin:0 0 4px}
+.a{white-space:pre-wrap;margin:0;padding-left:12px;border-left:3px solid #C7D3DC}.checklist{list-style:none;padding:0}.checklist li{margin:4px 0;font-family:Arial,sans-serif}
+.explain{background:#F3F7F9;padding:10px 16px;border-radius:8px}</style></head><body>${reportBody(false)}</body></html>`;
+    try {
+      await dl.save({ filename:`Day21-desk-model-guide-${(S.name||"student").trim().replace(/[^A-Za-z0-9]+/g,"-")}.html`, data:doc });
+      status.textContent = "Saved.";
+    } catch(e){
+      if (e && e.code==="declined") status.textContent = "Download canceled.";
+      else if (e && e.code==="rate_limited") status.textContent = "A download prompt is already open.";
+      else { status.textContent = "Downloads aren’t available here. Keep this page open while you draw."; btn.hidden = true; }
+    }
+  });
+}
+
+function go(i){
+  if (i<0 || i>LAST) return;
+  if (i>S.max){ if (!stepComplete(S.max) || i!==S.max+1) return; S.max = i; }
+  S.step = i; save(); render();
+}
+
+if (S.step>S.max) S.step = S.max;
+render();
+</script>
+</body>
+</html>
